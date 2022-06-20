@@ -34,7 +34,7 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true)
 public class PartyHealthStatusUpdate extends PartyMemberMessage
 {
-    public PartyHealthStatusUpdate(int currentHealth, int maxHealth, UUID memberID){
+    public PartyHealthStatusUpdate(int currentHealth, int maxHealth, long memberID){
         this.currentHealth = currentHealth;
         this.maxHealth = maxHealth;
         this.setMemberId(memberID);

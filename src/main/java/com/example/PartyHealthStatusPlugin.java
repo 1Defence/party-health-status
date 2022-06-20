@@ -44,8 +44,8 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PartyChanged;
 
 import net.runelite.client.party.messages.PartyMemberMessage;
-import net.runelite.client.party.messages.UserJoin;
-import net.runelite.client.party.messages.UserPart;
+import net.runelite.client.party.events.UserJoin;
+import net.runelite.client.party.events.UserPart;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -133,13 +133,6 @@ public class PartyHealthStatusPlugin extends Plugin
 	@Subscribe(priority = 1)
 	public void onUserJoin(final UserJoin message)
 	{
-		if (!partyService.getPartyId().equals(message.getPartyId()))
-		{
-			// This can happen when a session is resumed server side after the client party
-			// changes when disconnected.
-			return;
-		}
-
 		//when a user joins, request an update for the next registered game tick
 		queuedUpdate = true;
 	}
@@ -171,7 +164,7 @@ public class PartyHealthStatusPlugin extends Plugin
 	public boolean MemberIsValid(PartyMemberMessage message, boolean allowSelf){
 
 		if(!allowSelf) {
-			if(partyService.getLocalMember().getMemberId().equals(message.getMemberId())){
+			if(partyService.getLocalMember().getMemberId() == message.getMemberId()){
 				return false;
 			}
 		}
@@ -190,7 +183,7 @@ public class PartyHealthStatusPlugin extends Plugin
 
 
 		if(LocalMemberIsValid()){
-			UUID localID = partyService.getLocalMember().getMemberId();
+			long localID = partyService.getLocalMember().getMemberId();
 			String name = partyService.getMemberById(partyService.getLocalMember().getMemberId()).getDisplayName();
 
 			partyService.send(new PartyHealthStatusUpdate(currentHP, maxHP, localID));

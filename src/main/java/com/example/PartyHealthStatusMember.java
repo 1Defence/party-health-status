@@ -36,7 +36,7 @@ import java.util.UUID;
 class PartyHealthStatusMember
 {
     private final String name;
-    private UUID memberID;
+    private long memberID;
     private int currentHP;
     private int maxHP;
 
