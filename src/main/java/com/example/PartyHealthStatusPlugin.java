@@ -28,21 +28,16 @@ import com.google.inject.Provides;
 
 import java.util.*;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Inject;
 
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.*;
 
-
-import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PartyChanged;
-
 
 import net.runelite.client.party.PartyMember;
 import net.runelite.client.party.events.UserPart;
@@ -54,7 +49,6 @@ import net.runelite.client.plugins.party.PartyPluginService;
 import net.runelite.client.plugins.party.messages.CharacterNameUpdate;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.party.PartyService;
-import net.runelite.client.party.WSClient;
 import net.runelite.client.util.Text;
 
 @PluginDescriptor(
