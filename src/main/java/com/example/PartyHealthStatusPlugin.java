@@ -27,29 +27,32 @@ package com.example;
 import com.google.inject.Provides;
 
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Inject;
+
 import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 
-import net.runelite.api.events.GameTick;
-import net.runelite.api.events.StatChanged;
+
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PartyChanged;
 
-import net.runelite.client.party.messages.PartyMemberMessage;
-import net.runelite.client.party.events.UserJoin;
+
+import net.runelite.client.party.PartyMember;
 import net.runelite.client.party.events.UserPart;
 import net.runelite.client.plugins.Plugin;
+import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.party.PartyPlugin;
+import net.runelite.client.plugins.party.PartyPluginService;
+import net.runelite.client.plugins.party.messages.CharacterNameUpdate;
 import net.runelite.client.ui.overlay.OverlayManager;
-import net.runelite.client.party.PartyMember;
 import net.runelite.client.party.PartyService;
 import net.runelite.client.party.WSClient;
 import net.runelite.client.util.Text;
@@ -58,15 +61,11 @@ import net.runelite.client.util.Text;
 		name = "Party Health Status",
 		description = "Visual health display of party members"
 )
+
+@PluginDependency(PartyPlugin.class)
 @Slf4j
 public class PartyHealthStatusPlugin extends Plugin
 {
-
-	@Inject
-	private Client client;
-
-	@Inject
-	private ClientThread clientThread;
 
 	@Inject
 	private OverlayManager overlayManager;
@@ -74,8 +73,9 @@ public class PartyHealthStatusPlugin extends Plugin
 	@Inject
 	private PartyService partyService;
 
+	@Getter(AccessLevel.PACKAGE)
 	@Inject
-	private WSClient wsClient;
+	private PartyPluginService partyPluginService;
 
 	@Inject
 	private PartyHealthStatusOverlay partyHealthStatusOverlay;
@@ -84,19 +84,12 @@ public class PartyHealthStatusPlugin extends Plugin
 	private PartyHealthStatusConfig config;
 
 	@Getter(AccessLevel.PACKAGE)
-	private final Map<String, PartyHealthStatusMember> members = new ConcurrentHashMap<>();
-
-	@Getter(AccessLevel.PACKAGE)
-	@Setter(AccessLevel.PACKAGE)
-	private int lastKnownHP = -1;
-
-	@Getter(AccessLevel.PACKAGE)
-	@Setter(AccessLevel.PACKAGE)
-	private boolean queuedUpdate = false;
+	private final Map<String, Long> members = new HashMap<>();
 
 	/**
 	 * Visible players from the configuration (Strings)
 	 */
+	@Getter(AccessLevel.PACKAGE)
 	private List<String> visiblePlayers = new ArrayList<>();
 
 	private final String DEFAULT_MEMBER_NAME = "<unknown>";
@@ -113,13 +106,22 @@ public class PartyHealthStatusPlugin extends Plugin
 	{
 		visiblePlayers = getVisiblePlayers();
 		overlayManager.add(partyHealthStatusOverlay);
-		wsClient.registerMessage(PartyHealthStatusUpdate.class);
+
+		//handle startup while already in a party as party syncing events won't be fired.
+		if(partyService != null && partyService.isInParty()){
+			for (PartyMember member : partyService.getMembers()) {
+				if(member.getDisplayName().equals(DEFAULT_MEMBER_NAME)){
+					continue;//skip logged out players, they're updated via nameupdate
+				}
+				RegisterMember(member.getMemberId(),member.getDisplayName());
+			}
+		}
+
 	}
 
 	@Override
 	protected void shutDown()
 	{
-		wsClient.unregisterMessage(PartyHealthStatusUpdate.class);
 		overlayManager.remove(partyHealthStatusOverlay);
 		members.clear();
 	}
@@ -130,109 +132,27 @@ public class PartyHealthStatusPlugin extends Plugin
 		members.clear();
 	}
 
-	@Subscribe(priority = 1)
-	public void onUserJoin(final UserJoin message)
-	{
-		//when a user joins, request an update for the next registered game tick
-		queuedUpdate = true;
-	}
-
-	@Subscribe(priority = 1000) // run prior to the actual leave so we can still grab the name of the leaving player
-	public void onUserPart(final UserPart message)
-	{
-		members.remove(partyService.getMemberById(message.getMemberId()).getDisplayName());
-	}
 
 	@Subscribe
-	public void onGameTick(GameTick event){
-		//an update has been requested, resync party members hp data
-		if(queuedUpdate && client.getLocalPlayer() != null && partyService.isInParty()){
-			String name = partyService.getMemberById(partyService.getLocalMember().getMemberId()).getDisplayName();
-			if(!name.equals(DEFAULT_MEMBER_NAME)){
-				queuedUpdate = false;
-				SendUpdate(client.getBoostedSkillLevel(Skill.HITPOINTS), client.getRealSkillLevel(Skill.HITPOINTS));
+	public void onUserPart(final UserPart message) {
+		//name not always present, find by id
+		String name = "";
+		for (Map.Entry<String, Long> entry: members.entrySet()) {
+			if(entry.getValue() == message.getMemberId()){
+				name = entry.getKey();
 			}
 		}
-	}
-
-	public boolean LocalMemberIsValid(){
-		//validate local member is in a party
-		PartyMember localMember = partyService.getLocalMember();
-		return (localMember != null);
-	}
-
-	public boolean MemberIsValid(PartyMemberMessage message, boolean allowSelf){
-
-		if(!allowSelf) {
-			if(partyService.getLocalMember().getMemberId() == message.getMemberId()){
-				return false;
-			}
-		}
-
-		String name = partyService.getMemberById(message.getMemberId()).getDisplayName();
-		if (name == null)
-		{
-			return false;
-		}
-
-		return true;
-	}
-
-
-	public void SendUpdate(int currentHP, int maxHP){
-
-
-		if(LocalMemberIsValid()){
-			long localID = partyService.getLocalMember().getMemberId();
-			String name = partyService.getMemberById(partyService.getLocalMember().getMemberId()).getDisplayName();
-
-			partyService.send(new PartyHealthStatusUpdate(currentHP, maxHP, localID));
-			//handle self locally.
-			PartyHealthStatusMember partyHealthStatusMember = members.computeIfAbsent(name, PartyHealthStatusMember::new);
-			partyHealthStatusMember.setCurrentHP(currentHP);
-			partyHealthStatusMember.setMaxHP(maxHP);
+		if(!name.isEmpty()) {
+			members.remove(name);
 		}
 	}
 
-	@Subscribe
-	public void onStatChanged(StatChanged statChanged)
-	{
-
-		if(queuedUpdate){
-			return;
-		}
-
-		Skill skill = statChanged.getSkill();
-		if(skill != Skill.HITPOINTS){
-			return;
-		}
-
-		int maxHP = client.getRealSkillLevel(skill);
-		int currentHP = client.getBoostedSkillLevel(skill);
-
-		if(currentHP != lastKnownHP){
-			SendUpdate(currentHP,maxHP);
-		}
-
-		lastKnownHP = currentHP;
-
+	void RegisterMember(long memberID, String memberName){
+		members.putIfAbsent(memberName,memberID);
 	}
 
-	@Subscribe
-	public void onPartyHealthStatusUpdate(PartyHealthStatusUpdate partyHealthStatusUpdate)
-	{
 
-		if(!MemberIsValid(partyHealthStatusUpdate,false)){
-			return;
-		}
-
-		PartyHealthStatusMember partyHealthStatusMember = members.computeIfAbsent(partyService.getMemberById(partyHealthStatusUpdate.getMemberId()).getDisplayName(), PartyHealthStatusMember::new);
-		partyHealthStatusMember.setCurrentHP(partyHealthStatusUpdate.getCurrentHealth());
-		partyHealthStatusMember.setMaxHP(partyHealthStatusUpdate.getMaxHealth());
-
-	}
-
-	public List<String> getVisiblePlayers()
+	public List<String> parseVisiblePlayers()
 	{
 		final String configPlayers = config.getVisiblePlayers().toLowerCase();
 
@@ -252,9 +172,16 @@ public class PartyHealthStatusPlugin extends Plugin
 			return;
 		}
 
-		visiblePlayers = getVisiblePlayers();
-
+		visiblePlayers = parseVisiblePlayers();
 	}
 
+	//only register member once their name has been set.
+	@Subscribe
+	public void onCharacterNameUpdate(final CharacterNameUpdate event){
+	String name = event.getCharacterName();
+		if(!name.isEmpty()){
+			RegisterMember(event.getMemberId(),event.getCharacterName());
+		}
+	}
 
 }

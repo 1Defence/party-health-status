@@ -32,6 +32,7 @@ import javax.inject.Inject;
 import net.runelite.api.*;
 import net.runelite.api.Point;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.plugins.party.data.PartyData;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
@@ -66,7 +67,6 @@ public class PartyHealthStatusOverlay extends Overlay
     @Override
     public Dimension render(Graphics2D graphics)
     {
-
         graphics.setFont(new Font(FontManager.getRunescapeFont().toString(), Font.BOLD, this.config.fontSize()));
 
         //track player locations for vertical-offsetting purposes, when players are stacked their names/hp(if rendered) should stack instead of overlapping
@@ -84,14 +84,19 @@ public class PartyHealthStatusOverlay extends Overlay
             if(!plugin.getMembers().containsKey(name)){
                 continue;
             }
-
             if(!plugin.getVisiblePlayers().isEmpty() && !plugin.getVisiblePlayers().contains(name.toLowerCase())){
                 continue;
             }
 
-            PartyHealthStatusMember memberData = plugin.getMembers().get(name);
-            int currentHP = memberData.getCurrentHP();
-            int maxHP = memberData.getMaxHP();
+            long memberID = plugin.getMembers().get(name);
+            PartyData partyData = plugin.getPartyPluginService().getPartyData(memberID);
+
+            if (partyData == null){
+                continue;
+            }
+
+            int currentHP = partyData.getHitpoints();
+            int maxHP = partyData.getMaxHitpoints();
 
             boolean nameRendered = config.drawNames() || (!config.drawNames() && (currentHP < maxHP));
             Color col = config.getHealthyColor();
@@ -112,7 +117,7 @@ public class PartyHealthStatusOverlay extends Overlay
                 int r = ClampMax((1 - currentRatio) * 255, 255);
                 int g = ClampMax(currentRatio * 255, 255);
                 col = (config.getHitpointsThreshold() == 0 || currentHP >= maxHP) ? config.getHealthyColor() : new Color(r, g, 0, config.hullOpacity());
-                renderPlayerOverlay(graphics, player, col, playersTracked);
+                renderPlayerOverlay(graphics, player, col, playersTracked,currentHP,maxHP);
 
             }
 
@@ -139,11 +144,8 @@ public class PartyHealthStatusOverlay extends Overlay
         }
     }
 
-    private void renderPlayerOverlay(Graphics2D graphics, Player actor, Color color, int playersTracked)
+    private void renderPlayerOverlay(Graphics2D graphics, Player actor, Color color, int playersTracked, int currentHP, int maxHP)
     {
-        int currentHP = plugin.getMembers().get(actor.getName()).getCurrentHP();
-        int maxHP = plugin.getMembers().get(actor.getName()).getMaxHP();
-
         String playerName = config.drawNames() ? Text.removeTags(actor.getName()) : "";
         String endingPercentString = config.drawPercentByName() ? "%" : "";
         String startingParenthesesString = config.drawParentheses() ? "(" : "";
