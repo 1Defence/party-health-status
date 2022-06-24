@@ -142,7 +142,7 @@ public class PartyHealthStatusPlugin extends Plugin
 	}
 
 	void RegisterMember(long memberID, String memberName){
-		members.putIfAbsent(memberName,memberID);
+		members.put(memberName,memberID);
 	}
 
 
