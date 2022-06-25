@@ -38,6 +38,7 @@ import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.OverlayUtil;
+import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 
 public class PartyHealthStatusOverlay extends Overlay
@@ -67,7 +68,7 @@ public class PartyHealthStatusOverlay extends Overlay
     @Override
     public Dimension render(Graphics2D graphics)
     {
-        graphics.setFont(new Font(FontManager.getRunescapeFont().toString(), Font.BOLD, this.config.fontSize()));
+        graphics.setFont(new Font(FontManager.getRunescapeFont().toString(), config.boldFont() ? Font.BOLD : Font.PLAIN, this.config.fontSize()));
 
         //track player locations for vertical-offsetting purposes, when players are stacked their names/hp(if rendered) should stack instead of overlapping
         List<WorldPoint> trackedLocations = new ArrayList<>();
@@ -98,7 +99,7 @@ public class PartyHealthStatusOverlay extends Overlay
             int currentHP = partyData.getHitpoints();
             int maxHP = partyData.getMaxHitpoints();
 
-            boolean nameRendered = config.drawNames() || (!config.drawNames() && (currentHP < maxHP));
+            boolean nameRendered = config.drawNames() || (!config.drawNames() && (currentHP < (maxHP-config.healthyOffset())));
             Color col = config.getHealthyColor();
 
             if(nameRendered){
@@ -112,11 +113,39 @@ public class PartyHealthStatusOverlay extends Overlay
                 }
                 trackedLocations.add(player.getWorldLocation());
 
-                float hpThreshold = config.getHitpointsThreshold();
-                float currentRatio = (currentHP - hpThreshold <= 0) ? 0 : ClampMinf(((float)currentHP - hpThreshold) / maxHP, 0);
-                int r = ClampMax((1 - currentRatio) * 255, 255);
-                int g = ClampMax(currentRatio * 255, 255);
-                col = (config.getHitpointsThreshold() == 0 || currentHP >= maxHP) ? config.getHealthyColor() : new Color(r, g, 0, config.hullOpacity());
+                switch (config.getColorType()){
+
+                    case LERP_2D:
+                    {
+                        float hpThreshold = config.getHitpointsMinimum();
+                        float currentRatio = (currentHP - hpThreshold <= 0) ? 0 : ClampMinf(((float) currentHP - hpThreshold) / maxHP, 0);
+                        int r = ClampMax((1 - currentRatio) * 255, 255);
+                        int g = ClampMax(currentRatio * 255, 255);
+                        col = (currentHP >= (maxHP - config.healthyOffset())) ? config.getHealthyColor() : new Color(r, g, 0, config.hullOpacity());
+                    }
+                        break;
+                    case LERP_3D:
+                    {
+                        float halfHP = (float)maxHP/2f;
+                        if(currentHP >= halfHP){
+                            col = ColorUtil.colorLerp(Color.orange, Color.green, (((float)currentHP-halfHP)/halfHP));
+                        }else{
+                            col = ColorUtil.colorLerp(Color.red, Color.orange, (float)currentHP/halfHP);
+                        }
+                    }
+                        break;
+                    case COLOR_THRESHOLDS:
+                    {
+                        float hpPerc = ((float)currentHP/(float)maxHP)*maxHP;
+                        col = hpPerc <= config.getLowHP() ? config.getLowColor()
+                                : hpPerc <= config.getMediumHP() ? config.getMediumColor()
+                                : hpPerc < maxHP ? config.getHighColor() : config.getHealthyColor();
+                    }
+                        break;
+                }
+
+                col = new Color(col.getRed(),col.getGreen(),col.getBlue(),config.hullOpacity());
+
                 renderPlayerOverlay(graphics, player, col, playersTracked,currentHP,maxHP);
 
             }
@@ -151,13 +180,15 @@ public class PartyHealthStatusOverlay extends Overlay
         String startingParenthesesString = config.drawParentheses() ? "(" : "";
         String endingParenthesesString = config.drawParentheses() ? ")" : "";
 
+        int healthValue = config.drawPercentByName() ? ((currentHP*100)/maxHP) : currentHP;
+
         if(currentHP != -1){
-            playerName += currentHP >= maxHP ? "" : " "+(startingParenthesesString+(currentHP*100)/maxHP)+endingPercentString+endingParenthesesString;
+            playerName += currentHP >= maxHP ? "" : " "+(startingParenthesesString+healthValue+endingPercentString+endingParenthesesString);
         }
 
         Point textLocation = actor.getCanvasTextLocation(graphics, playerName, config.offSetTextZ()/*(playersTracked*20)*/);
 
-        float verticalOffSetMultiplier = 1f + (playersTracked*0.1f);
+        float verticalOffSetMultiplier = 1f + (playersTracked * (((float)config.offSetStackVertical())/100f));
 
         if(textLocation != null)
         {

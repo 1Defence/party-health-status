@@ -98,7 +98,7 @@ public class PartyHealthStatusPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
-		visiblePlayers = getVisiblePlayers();
+		visiblePlayers = parseVisiblePlayers();
 		overlayManager.add(partyHealthStatusOverlay);
 
 		//handle startup while already in a party as party syncing events won't be fired.
