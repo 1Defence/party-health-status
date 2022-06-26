@@ -97,7 +97,9 @@ public class PartyHealthStatusOverlay extends Overlay
             int currentHP = partyData.getHitpoints();
             int maxHP = partyData.getMaxHitpoints();
 
-            boolean nameRendered = plugin.drawNames || (currentHP < (maxHP-plugin.healthyOffSet));
+            boolean healthy = currentHP >= (maxHP-plugin.healthyOffSet);
+
+            boolean nameRendered = plugin.drawNames || !healthy;
             Color col = plugin.healthyColor;
 
             if(nameRendered){
@@ -111,35 +113,37 @@ public class PartyHealthStatusOverlay extends Overlay
                 }
                 trackedLocations.add(player.getWorldLocation());
 
-                switch (plugin.colorType){
+                if(!healthy){
+                    switch (plugin.colorType){
 
-                    case LERP_2D:
-                    {
-                        float hpThreshold = plugin.hitPointsMinimum;
-                        float currentRatio = (currentHP - hpThreshold <= 0) ? 0 : ClampMinf(((float) currentHP - hpThreshold) / maxHP, 0);
-                        int r = ClampMax((1 - currentRatio) * 255, 255);
-                        int g = ClampMax(currentRatio * 255, 255);
-                        col = (currentHP >= (maxHP - plugin.healthyOffSet)) ? plugin.healthyColor : new Color(r, g, 0, plugin.hullOpacity);
-                    }
-                        break;
-                    case LERP_3D:
-                    {
-                        float halfHP = (float)maxHP/2f;
-                        if(currentHP >= halfHP){
-                            col = ColorUtil.colorLerp(Color.orange, Color.green, (((float)currentHP-halfHP)/halfHP));
-                        }else{
-                            col = ColorUtil.colorLerp(Color.red, Color.orange, (float)currentHP/halfHP);
+                        case LERP_2D:
+                        {
+                            float hpThreshold = plugin.hitPointsMinimum;
+                            float currentRatio = (currentHP - hpThreshold <= 0) ? 0 : ClampMinf(((float) currentHP - hpThreshold) / maxHP, 0);
+                            int r = ClampMax((1 - currentRatio) * 255, 255);
+                            int g = ClampMax(currentRatio * 255, 255);
+                            col = new Color(r, g, 0, plugin.hullOpacity);
                         }
+                            break;
+                        case LERP_3D:
+                        {
+                            float halfHP = (float)maxHP/2f;
+                            if(currentHP >= halfHP){
+                                col = ColorUtil.colorLerp(Color.orange, Color.green, (((float)currentHP-halfHP)/halfHP));
+                            }else{
+                                col = ColorUtil.colorLerp(Color.red, Color.orange, (float)currentHP/halfHP);
+                            }
+                        }
+                            break;
+                        case COLOR_THRESHOLDS:
+                        {
+                            float hpPerc = ((float)currentHP/(float)maxHP)*maxHP;
+                            col = hpPerc <= plugin.lowHP ? plugin.lowColor
+                                    : hpPerc <= plugin.mediumHP ? plugin.mediumColor
+                                    : hpPerc < maxHP ? plugin.highColor : plugin.healthyColor;
+                        }
+                            break;
                     }
-                        break;
-                    case COLOR_THRESHOLDS:
-                    {
-                        float hpPerc = ((float)currentHP/(float)maxHP)*maxHP;
-                        col = hpPerc <= plugin.lowHP ? plugin.lowColor
-                                : hpPerc <= plugin.mediumHP ? plugin.mediumColor
-                                : hpPerc < maxHP ? plugin.highColor : plugin.healthyColor;
-                    }
-                        break;
                 }
 
                 col = new Color(col.getRed(),col.getGreen(),col.getBlue(),plugin.hullOpacity);
@@ -181,7 +185,7 @@ public class PartyHealthStatusOverlay extends Overlay
         int healthValue = plugin.drawPercentByName ? ((currentHP*100)/maxHP) : currentHP;
 
         if(currentHP != -1){
-            playerName += currentHP >= maxHP ? "" : " "+(startingParenthesesString+healthValue+endingPercentString+endingParenthesesString);
+            playerName += currentHP >= (maxHP-plugin.healthyOffSet) ? "" : " "+(startingParenthesesString+healthValue+endingPercentString+endingParenthesesString);
         }
 
         Point textLocation = actor.getCanvasTextLocation(graphics, playerName, plugin.offSetTextZ/*(playersTracked*20)*/);
