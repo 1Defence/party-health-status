@@ -26,6 +26,7 @@ package com.example;
 
 import com.google.inject.Provides;
 
+import java.awt.*;
 import java.util.*;
 import java.util.List;
 import javax.inject.Inject;
@@ -88,6 +89,34 @@ public class PartyHealthStatusPlugin extends Plugin
 
 	private final String DEFAULT_MEMBER_NAME = "<unknown>";
 
+	/*<|Cached Configs*/
+
+	int healthyOffSet,
+			hullOpacity,
+			hitPointsMinimum,
+			mediumHP,
+			lowHP,
+			offSetTextHorizontal,
+			offSetTextVertical,
+			offSetTextZ,
+			offSetStackVertical,
+			fontSize;
+
+
+	Color healthyColor,
+			highColor,
+			mediumColor,
+			lowColor;
+
+
+	boolean renderPlayerHull,
+			drawNames,
+			drawPercentByName,
+			drawParentheses,
+			boldFont;
+
+	PartyHealthStatusConfig.ColorType colorType;
+	/*Cached Configs|>*/
 
 	@Provides
 	PartyHealthStatusConfig provideConfig(ConfigManager configManager)
@@ -98,7 +127,7 @@ public class PartyHealthStatusPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
-		visiblePlayers = parseVisiblePlayers();
+		CacheConfigs();
 		overlayManager.add(partyHealthStatusOverlay);
 
 		//handle startup while already in a party as party syncing events won't be fired.
@@ -166,8 +195,39 @@ public class PartyHealthStatusPlugin extends Plugin
 			return;
 		}
 
+		CacheConfigs();
+	}
+
+	public void CacheConfigs(){
+
+		healthyOffSet = config.healthyOffset();
+				hullOpacity = config.hullOpacity();
+				hitPointsMinimum = config.getHitpointsMinimum();
+				mediumHP = config.getMediumHP();
+				lowHP = config.getLowHP();
+				offSetTextHorizontal = config.offSetTextHorizontal();
+				offSetTextVertical = config.offSetTextVertial();
+				offSetTextZ = config.offSetTextZ();
+				offSetStackVertical = config.offSetStackVertical();
+				fontSize = config.fontSize();
+
+		healthyColor = config.getHealthyColor();
+				highColor = config.getHighColor();
+				mediumColor = config.getMediumColor();
+				lowColor = config.getLowColor();
+
+
+		renderPlayerHull = config.renderPlayerHull();
+				drawNames = config.drawNames();
+				drawPercentByName = config.drawPercentByName();
+				drawParentheses = config.drawParentheses();
+				boldFont = config.boldFont();
+
+		colorType = config.getColorType();
+
 		visiblePlayers = parseVisiblePlayers();
 	}
+
 
 	//only register member once their name has been set.
 	@Subscribe
