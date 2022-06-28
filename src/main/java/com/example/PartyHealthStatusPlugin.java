@@ -47,7 +47,7 @@ import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.party.PartyPlugin;
 import net.runelite.client.plugins.party.PartyPluginService;
-import net.runelite.client.plugins.party.messages.CharacterNameUpdate;
+import net.runelite.client.plugins.party.messages.StatusUpdate;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.party.PartyService;
 import net.runelite.client.util.Text;
@@ -231,9 +231,9 @@ public class PartyHealthStatusPlugin extends Plugin
 
 	//only register member once their name has been set.
 	@Subscribe
-	public void onCharacterNameUpdate(final CharacterNameUpdate event){
-	String name = event.getCharacterName();
-		if(!name.isEmpty()){
+	public void onStatusUpdate(final StatusUpdate event){
+		String name = event.getCharacterName();
+		if(name != null && !name.isEmpty()){
 			RegisterMember(event.getMemberId(),event.getCharacterName());
 		}
 	}
