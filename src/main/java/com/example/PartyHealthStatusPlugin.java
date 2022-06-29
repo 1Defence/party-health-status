@@ -35,6 +35,11 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import net.runelite.api.Client;
+import net.runelite.api.MenuAction;
+import net.runelite.api.MenuEntry;
+import net.runelite.api.Player;
+import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -47,10 +52,15 @@ import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.party.PartyPlugin;
 import net.runelite.client.plugins.party.PartyPluginService;
+import net.runelite.client.plugins.party.data.PartyData;
 import net.runelite.client.plugins.party.messages.StatusUpdate;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.party.PartyService;
+import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
+
+import static com.example.PartyHealthStatusConfig.TextRenderType;
+import static com.example.PartyHealthStatusConfig.ColorType;
 
 @PluginDescriptor(
 		name = "Party Health Status",
@@ -77,6 +87,9 @@ public class PartyHealthStatusPlugin extends Plugin
 
 	@Inject
 	private PartyHealthStatusConfig config;
+
+	@Inject
+	private Client client;
 
 	@Getter(AccessLevel.PACKAGE)
 	private final Map<String, Long> members = new HashMap<>();
@@ -110,12 +123,15 @@ public class PartyHealthStatusPlugin extends Plugin
 
 
 	boolean renderPlayerHull,
-			drawNames,
+			recolorHealOther,
 			drawPercentByName,
 			drawParentheses,
 			boldFont;
 
-	PartyHealthStatusConfig.ColorType colorType;
+	TextRenderType nameRender,
+			hpRender;
+
+	ColorType colorType;
 	/*Cached Configs|>*/
 
 	@Provides
@@ -218,12 +234,16 @@ public class PartyHealthStatusPlugin extends Plugin
 
 
 		renderPlayerHull = config.renderPlayerHull();
-				drawNames = config.drawNames();
+				recolorHealOther = config.recolorHealOther();
 				drawPercentByName = config.drawPercentByName();
 				drawParentheses = config.drawParentheses();
 				boldFont = config.boldFont();
 
 		colorType = config.getColorType();
+
+		nameRender = config.nameRender();
+				hpRender = config.hpRender();
+
 
 		visiblePlayers = parseVisiblePlayers();
 	}
@@ -235,6 +255,108 @@ public class PartyHealthStatusPlugin extends Plugin
 		String name = event.getCharacterName();
 		if(name != null && !name.isEmpty()){
 			RegisterMember(event.getMemberId(),event.getCharacterName());
+		}
+	}
+
+
+	public boolean RenderText(TextRenderType textRenderType, boolean healthy){
+		if(textRenderType == TextRenderType.NEVER)
+			return false;
+		return textRenderType == TextRenderType.ALWAYS
+				|| (textRenderType == TextRenderType.WHEN_MISSING_HP && !healthy);
+	}
+
+	public int ClampMax(float val, float max){
+		return val > max ? (int)max : (int)val;
+	}
+
+	public float ClampMinf(float val, float min){
+		return val < min ? min : val;
+	}
+
+	public boolean IsHealthy(int currentHP,int maxHP){
+		return currentHP == -1 || currentHP >= (maxHP-healthyOffSet);
+	}
+
+	public Color GetHitPointsColor(int currentHP, int maxHP){
+		Color color = healthyColor;
+
+		switch (colorType){
+
+			case LERP_2D:
+			{
+				float hpThreshold = hitPointsMinimum;
+				float currentRatio = (currentHP - hpThreshold <= 0) ? 0 : ClampMinf(((float) currentHP - hpThreshold) / maxHP, 0);
+				int r = ClampMax((1 - currentRatio) * 255, 255);
+				int g = ClampMax(currentRatio * 255, 255);
+				color = new Color(r, g, 0, hullOpacity);
+			}
+			break;
+			case LERP_3D:
+			{
+				float halfHP = (float)maxHP/2f;
+				if(currentHP >= halfHP){
+					color = ColorUtil.colorLerp(Color.orange, Color.green, (((float)currentHP-halfHP)/halfHP));
+				}else{
+					color = ColorUtil.colorLerp(Color.red, Color.orange, (float)currentHP/halfHP);
+				}
+			}
+			break;
+			case COLOR_THRESHOLDS:
+			{
+				float hpPerc = ((float)currentHP/(float)maxHP)*maxHP;
+				color = hpPerc <= lowHP ? lowColor
+						: hpPerc <= mediumHP ? mediumColor
+						: hpPerc < maxHP ? highColor : healthyColor;
+			}
+			break;
+		}
+		return color;
+	}
+
+	String GenerateTargetText(Player player){
+		String name = player.getName();
+		long memberID = getMembers().getOrDefault(name, -1L);
+		PartyData partyData = getPartyPluginService().getPartyData(memberID);
+		boolean validMember = partyData != null;
+
+		int currentHP = validMember ? partyData.getHitpoints() : -1;
+		int maxHP = validMember ? partyData.getMaxHitpoints() : -1;
+		boolean healthy = IsHealthy(currentHP,maxHP);
+
+		Color greyedOut = new Color(128,128,128);
+		Color color = GetHitPointsColor(currentHP,maxHP);
+
+		return ColorUtil.wrapWithColorTag("Heal Other", healthy ? greyedOut : Color.green) +
+				ColorUtil.wrapWithColorTag(" -> ", healthy ? greyedOut : Color.white) +
+				ColorUtil.wrapWithColorTag(name, healthy ? greyedOut : color) +
+				ColorUtil.wrapWithColorTag(healthy ? "" : ("  (HP-" + currentHP + ")"), healthy ? greyedOut : color);
+	}
+
+	@Subscribe
+	public void onMenuEntryAdded(MenuEntryAdded event)
+	{
+		if(!recolorHealOther)
+			return;
+
+		int type = event.getType();
+		final MenuAction menuAction = MenuAction.of(type);
+
+		if(menuAction.equals(MenuAction.WIDGET_TARGET_ON_PLAYER)){
+			String option = event.getMenuEntry().getOption();
+			String target = Text.removeTags(event.getMenuEntry().getTarget());
+
+			if(option.equals("Cast") && target.startsWith("Heal Other")){
+
+				Player player = client.getCachedPlayers()[event.getIdentifier()];
+
+				MenuEntry[] menuEntries = client.getMenuEntries();
+				final MenuEntry menuEntry = menuEntries[menuEntries.length - 1];
+
+				menuEntry.setTarget(GenerateTargetText(player));
+				client.setMenuEntries(menuEntries);
+
+			}
 		}
 	}
 

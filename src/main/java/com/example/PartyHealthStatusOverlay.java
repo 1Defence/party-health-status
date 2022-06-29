@@ -38,7 +38,6 @@ import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.OverlayUtil;
-import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 
 public class PartyHealthStatusOverlay extends Overlay
@@ -52,15 +51,7 @@ public class PartyHealthStatusOverlay extends Overlay
         this.client = client;
         this.plugin = plugin;
         setPosition(OverlayPosition.DYNAMIC);
-        setLayer(OverlayLayer.ALWAYS_ON_TOP);
-    }
-
-    int ClampMax(float val, float max){
-        return val > max ? (int)max : (int)val;
-    }
-
-    float ClampMinf(float val, float min){
-        return val < min ? min : val;
+        setLayer(OverlayLayer.UNDER_WIDGETS);
     }
 
     @Override
@@ -97,9 +88,9 @@ public class PartyHealthStatusOverlay extends Overlay
             int currentHP = partyData.getHitpoints();
             int maxHP = partyData.getMaxHitpoints();
 
-            boolean healthy = currentHP >= (maxHP-plugin.healthyOffSet);
+            boolean healthy = plugin.IsHealthy(currentHP,maxHP);
 
-            boolean nameRendered = plugin.drawNames || !healthy;
+            boolean nameRendered = plugin.RenderText(plugin.nameRender,healthy) || plugin.RenderText(plugin.hpRender,healthy);
             Color col = plugin.healthyColor;
 
             if(nameRendered){
@@ -114,41 +105,12 @@ public class PartyHealthStatusOverlay extends Overlay
                 trackedLocations.add(player.getWorldLocation());
 
                 if(!healthy){
-                    switch (plugin.colorType){
-
-                        case LERP_2D:
-                        {
-                            float hpThreshold = plugin.hitPointsMinimum;
-                            float currentRatio = (currentHP - hpThreshold <= 0) ? 0 : ClampMinf(((float) currentHP - hpThreshold) / maxHP, 0);
-                            int r = ClampMax((1 - currentRatio) * 255, 255);
-                            int g = ClampMax(currentRatio * 255, 255);
-                            col = new Color(r, g, 0, plugin.hullOpacity);
-                        }
-                            break;
-                        case LERP_3D:
-                        {
-                            float halfHP = (float)maxHP/2f;
-                            if(currentHP >= halfHP){
-                                col = ColorUtil.colorLerp(Color.orange, Color.green, (((float)currentHP-halfHP)/halfHP));
-                            }else{
-                                col = ColorUtil.colorLerp(Color.red, Color.orange, (float)currentHP/halfHP);
-                            }
-                        }
-                            break;
-                        case COLOR_THRESHOLDS:
-                        {
-                            float hpPerc = ((float)currentHP/(float)maxHP)*maxHP;
-                            col = hpPerc <= plugin.lowHP ? plugin.lowColor
-                                    : hpPerc <= plugin.mediumHP ? plugin.mediumColor
-                                    : hpPerc < maxHP ? plugin.highColor : plugin.healthyColor;
-                        }
-                            break;
-                    }
+                    col = plugin.GetHitPointsColor(currentHP,maxHP);
                 }
 
                 col = new Color(col.getRed(),col.getGreen(),col.getBlue(),plugin.hullOpacity);
 
-                renderPlayerOverlay(graphics, player, col, playersTracked,currentHP,maxHP);
+                renderPlayerOverlay(graphics, player, col, playersTracked,currentHP,maxHP,healthy);
 
             }
 
@@ -175,18 +137,17 @@ public class PartyHealthStatusOverlay extends Overlay
         }
     }
 
-    private void renderPlayerOverlay(Graphics2D graphics, Player actor, Color color, int playersTracked, int currentHP, int maxHP)
+    private void renderPlayerOverlay(Graphics2D graphics, Player actor, Color color, int playersTracked, int currentHP, int maxHP, boolean healthy)
     {
-        String playerName = plugin.drawNames ? Text.removeTags(actor.getName()) : "";
+        String playerName = plugin.RenderText(plugin.nameRender,healthy) ? Text.removeTags(actor.getName()) : "";
         String endingPercentString = plugin.drawPercentByName ? "%" : "";
         String startingParenthesesString = plugin.drawParentheses ? "(" : "";
         String endingParenthesesString = plugin.drawParentheses ? ")" : "";
 
         int healthValue = plugin.drawPercentByName ? ((currentHP*100)/maxHP) : currentHP;
 
-        if(currentHP != -1){
-            playerName += currentHP >= (maxHP-plugin.healthyOffSet) ? "" : " "+(startingParenthesesString+healthValue+endingPercentString+endingParenthesesString);
-        }
+        playerName += plugin.RenderText(plugin.hpRender,healthy) ? " "+(startingParenthesesString+healthValue+endingPercentString+endingParenthesesString) : "";
+
 
         Point textLocation = actor.getCanvasTextLocation(graphics, playerName, plugin.offSetTextZ/*(playersTracked*20)*/);
 

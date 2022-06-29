@@ -33,6 +33,7 @@ public interface PartyHealthStatusConfig extends Config
 {
 
 	enum ColorType { LERP_2D,LERP_3D,COLOR_THRESHOLDS,STATIC}
+	enum TextRenderType { ALWAYS,NEVER,WHEN_MISSING_HP}
 	@ConfigSection(name="Color Thresholds", description="Values used when Color Type is Color Thresholds", position=2, closedByDefault=true)
 	String colorThresholds = "customThresholds";
 	@ConfigSection(name="Color Lerp 2d", description="Values used when Color Type is Lerp 2d", position=2, closedByDefault=true)
@@ -99,6 +100,17 @@ public interface PartyHealthStatusConfig extends Config
 
 	@ConfigItem(
 			position = 5,
+			keyName = "recolorHealOther",
+			name = "Recolor Heal Other",
+			description = "Recolor heal other menus based on current hitpoints, grey will indicate the member is healthy/full hitpoints",
+			section = visualOverlay)
+	default boolean recolorHealOther()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+			position = 6,
 			keyName = "colorType",
 			name = "Color Type",
 			description = "Method of color calculation",
@@ -187,15 +199,26 @@ public interface PartyHealthStatusConfig extends Config
 
 	/*Text Overlay*/
 	@ConfigItem(
-			position = 0,
-			keyName = "drawNames",
-			name = "Draw Name Above players",
-			description = "Configures whether or not player names should render",
+			position = -2,
+			keyName = "nameRender",
+			name = "Name Render",
+			description = "Configures how player names should render",
 			section = textOverlay
 	)
-	default boolean drawNames()
+	default TextRenderType nameRender()
 	{
-		return false;
+		return TextRenderType.WHEN_MISSING_HP;
+	}
+	@ConfigItem(
+			position = 0,
+			keyName = "hpRender",
+			name = "HP Render",
+			description = "Configures how player hitpoints should render",
+			section = textOverlay
+	)
+	default TextRenderType hpRender()
+	{
+		return TextRenderType.WHEN_MISSING_HP;
 	}
 
 	@ConfigItem(
