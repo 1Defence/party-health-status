@@ -281,6 +281,10 @@ public class PartyHealthStatusPlugin extends Plugin
 	public Color GetHitPointsColor(int currentHP, int maxHP){
 		Color color = healthyColor;
 
+		if(currentHP == -1) {
+			return color;
+		}
+
 		switch (colorType){
 
 			case LERP_2D:
