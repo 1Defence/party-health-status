@@ -44,6 +44,18 @@ public interface PartyHealthStatusConfig extends Config
 	String textOverlay = "textOverlay";
 
 	/*Visual Overlay*/
+
+	@ConfigItem(
+			position = 0,
+			keyName = "hideAllPlayers",
+			name = "Hide All Players",
+			description = "Enable this when you only want to send your health information to other party members",
+			section = visualOverlay)
+	default boolean hideAllPlayers()
+	{
+		return false;
+	}
+
 	@ConfigItem(
 			position = 0,
 			keyName = "visiblePlayers",

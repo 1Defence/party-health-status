@@ -32,7 +32,6 @@ import javax.inject.Inject;
 import net.runelite.api.*;
 import net.runelite.api.Point;
 import net.runelite.api.coords.WorldPoint;
-import net.runelite.client.plugins.party.data.PartyData;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
@@ -57,6 +56,11 @@ public class PartyHealthStatusOverlay extends Overlay
     @Override
     public Dimension render(Graphics2D graphics)
     {
+        //skip redundant checking
+        if(plugin.hideAllPlayers){
+            return null;
+        }
+
         graphics.setFont(new Font(FontManager.getRunescapeFont().toString(), plugin.boldFont ? Font.BOLD : Font.PLAIN, plugin.fontSize));
 
         //track player locations for vertical-offsetting purposes, when players are stacked their names/hp(if rendered) should stack instead of overlapping
@@ -78,15 +82,9 @@ public class PartyHealthStatusOverlay extends Overlay
                 continue;
             }
 
-            long memberID = plugin.getMembers().get(name);
-            PartyData partyData = plugin.getPartyPluginService().getPartyData(memberID);
 
-            if (partyData == null){
-                continue;
-            }
-
-            int currentHP = partyData.getHitpoints();
-            int maxHP = partyData.getMaxHitpoints();
+            int currentHP = plugin.getMembers().get(name).getCurrentHP();
+            int maxHP = plugin.getMembers().get(name).getMaxHP();
 
             boolean healthy = plugin.IsHealthy(currentHP,maxHP);
 

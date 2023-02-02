@@ -29,31 +29,32 @@ import com.google.inject.Provides;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Inject;
 
 import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
-import net.runelite.api.Client;
-import net.runelite.api.MenuAction;
-import net.runelite.api.MenuEntry;
-import net.runelite.api.Player;
+import net.runelite.api.*;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuEntryAdded;
+import net.runelite.api.events.StatChanged;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PartyChanged;
 
-import net.runelite.client.party.PartyMember;
+import net.runelite.client.events.RuneScapeProfileChanged;
+import net.runelite.client.party.WSClient;
+import net.runelite.client.party.events.UserJoin;
 import net.runelite.client.party.events.UserPart;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.party.PartyPlugin;
 import net.runelite.client.plugins.party.PartyPluginService;
-import net.runelite.client.plugins.party.data.PartyData;
-import net.runelite.client.plugins.party.messages.StatusUpdate;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.party.PartyService;
 import net.runelite.client.util.ColorUtil;
@@ -91,8 +92,19 @@ public class PartyHealthStatusPlugin extends Plugin
 	@Inject
 	private Client client;
 
+	@Inject
+	private WSClient wsClient;
+
 	@Getter(AccessLevel.PACKAGE)
-	private final Map<String, Long> members = new HashMap<>();
+	private final Map<String, PartyHealthStatusMember> members = new ConcurrentHashMap<>();
+
+	@Getter(AccessLevel.PACKAGE)
+	@Setter(AccessLevel.PACKAGE)
+	private int lastKnownHP = -1;
+
+	@Getter(AccessLevel.PACKAGE)
+	@Setter(AccessLevel.PACKAGE)
+	private boolean queuedUpdate = false;
 
 	/**
 	 * Visible players from the configuration (Strings)
@@ -122,7 +134,8 @@ public class PartyHealthStatusPlugin extends Plugin
 			lowColor;
 
 
-	boolean renderPlayerHull,
+	boolean hideAllPlayers,
+			renderPlayerHull,
 			recolorHealOther,
 			drawPercentByName,
 			drawParentheses,
@@ -145,22 +158,15 @@ public class PartyHealthStatusPlugin extends Plugin
 	{
 		CacheConfigs();
 		overlayManager.add(partyHealthStatusOverlay);
-
-		//handle startup while already in a party as party syncing events won't be fired.
-		if(partyService != null && partyService.isInParty()){
-			for (PartyMember member : partyService.getMembers()) {
-				if(member.getDisplayName().equals(DEFAULT_MEMBER_NAME)){
-					continue;//skip logged out players, they're updated via nameupdate
-				}
-				RegisterMember(member.getMemberId(),member.getDisplayName());
-			}
-		}
-
+		lastKnownHP = -1;
+		queuedUpdate = true;
+		wsClient.registerMessage(PartyHealthStatusUpdate.class);
 	}
 
 	@Override
 	protected void shutDown()
 	{
+		wsClient.unregisterMessage(PartyHealthStatusUpdate.class);
 		overlayManager.remove(partyHealthStatusOverlay);
 		members.clear();
 	}
@@ -171,13 +177,25 @@ public class PartyHealthStatusPlugin extends Plugin
 		members.clear();
 	}
 
+	@Subscribe
+	public void onUserJoin(final UserJoin message)
+	{
+		//when a user joins, request an update for the next registered game tick
+		queuedUpdate = true;
+	}
+
+	@Subscribe
+	public void onRuneScapeProfileChanged(RuneScapeProfileChanged runeScapeProfileChanged)
+	{
+		queuedUpdate = true;
+	}
 
 	@Subscribe
 	public void onUserPart(final UserPart message) {
 		//name not always present, find by id
 		String name = "";
-		for (Map.Entry<String, Long> entry: members.entrySet()) {
-			if(entry.getValue() == message.getMemberId()){
+		for (Map.Entry<String, PartyHealthStatusMember> entry: members.entrySet()) {
+			if(entry.getValue().getMemberID() == message.getMemberId()){
 				name = entry.getKey();
 			}
 		}
@@ -186,8 +204,14 @@ public class PartyHealthStatusPlugin extends Plugin
 		}
 	}
 
-	void RegisterMember(long memberID, String memberName){
-		members.put(memberName,memberID);
+	void RegisterMember(long memberID, String memberName, int currentHP, int maxHP){
+		if(memberName.equals(DEFAULT_MEMBER_NAME)){
+			return;
+		}
+		PartyHealthStatusMember member = members.computeIfAbsent(memberName, PartyHealthStatusMember::new);
+		member.setMemberID(memberID);
+		member.setCurrentHP(currentHP);
+		member.setMaxHP(maxHP);
 	}
 
 
@@ -233,7 +257,8 @@ public class PartyHealthStatusPlugin extends Plugin
 				lowColor = config.getLowColor();
 
 
-		renderPlayerHull = config.renderPlayerHull();
+		hideAllPlayers = config.hideAllPlayers();
+				renderPlayerHull = config.renderPlayerHull();
 				recolorHealOther = config.recolorHealOther();
 				drawPercentByName = config.drawPercentByName();
 				drawParentheses = config.drawParentheses();
@@ -249,15 +274,66 @@ public class PartyHealthStatusPlugin extends Plugin
 	}
 
 
-	//only register member once their name has been set.
 	@Subscribe
-	public void onStatusUpdate(final StatusUpdate event){
-		String name = event.getCharacterName();
-		if(name != null && !name.isEmpty()){
-			RegisterMember(event.getMemberId(),event.getCharacterName());
+	public void onPartyHealthStatusUpdate(PartyHealthStatusUpdate update)
+	{
+
+		if (partyService.getLocalMember().getMemberId() == update.getMemberId())
+		{
+			return;
 		}
+
+		String name = partyService.getMemberById(update.getMemberId()).getDisplayName();
+		if (name == null)
+		{
+			return;
+		}
+
+		RegisterMember(update.getMemberId(),name,update.getCurrentHealth(), update.getMaxHealth());
 	}
 
+
+	@Subscribe
+	public void onGameTick(GameTick event)
+	{
+		//an update has been requested, resync party members hp data
+		if (queuedUpdate && client.getLocalPlayer() != null && partyService.isInParty() && partyService.getLocalMember() != null)
+		{
+			String name = client.getLocalPlayer().getName();
+			String partyName = partyService.getMemberById(partyService.getLocalMember().getMemberId()).getDisplayName();
+			//dont send unless the partyname has updated to the local name
+			if (name != null && name.equals(partyName))
+			{
+				queuedUpdate = false;
+				SendUpdate(name, client.getBoostedSkillLevel(Skill.HITPOINTS), client.getRealSkillLevel(Skill.HITPOINTS));
+			}
+		}
+	}
+	@Subscribe
+	public void onStatChanged(StatChanged statChanged)
+	{
+		Skill skill = statChanged.getSkill();
+		if (skill != Skill.HITPOINTS)
+		{
+			return;
+		}
+
+		int currentHP = client.getBoostedSkillLevel(skill);
+
+		if (currentHP != lastKnownHP)
+		{
+			queuedUpdate = true;
+		}
+
+		lastKnownHP = currentHP;
+	}
+	public void SendUpdate(String name, int currentHP, int maxHP){
+		if(partyService.getLocalMember() != null) {
+			partyService.send(new PartyHealthStatusUpdate(currentHP, maxHP));
+			//handle self locally.
+			RegisterMember(partyService.getLocalMember().getMemberId(),name,currentHP,maxHP);
+		}
+	}
 
 	public boolean RenderText(TextRenderType textRenderType, boolean healthy){
 		if(textRenderType == TextRenderType.NEVER)
@@ -283,6 +359,10 @@ public class PartyHealthStatusPlugin extends Plugin
 
 		if(currentHP == -1) {
 			return color;
+		}
+
+		if(currentHP > maxHP){
+			currentHP = maxHP;
 		}
 
 		switch (colorType){
@@ -320,12 +400,10 @@ public class PartyHealthStatusPlugin extends Plugin
 
 	String GenerateTargetText(Player player){
 		String name = player.getName();
-		long memberID = getMembers().getOrDefault(name, -1L);
-		PartyData partyData = getPartyPluginService().getPartyData(memberID);
-		boolean validMember = partyData != null;
+		boolean validMember = members.containsKey(name);
 
-		int currentHP = validMember ? partyData.getHitpoints() : -1;
-		int maxHP = validMember ? partyData.getMaxHitpoints() : -1;
+		int currentHP = validMember ? members.get(name).getCurrentHP() : -1;
+		int maxHP = validMember ? members.get(name).getMaxHP() : -1;
 		boolean healthy = IsHealthy(currentHP,maxHP);
 
 		Color greyedOut = new Color(128,128,128);
