@@ -217,7 +217,7 @@ public class PartyHealthStatusPlugin extends Plugin
 
 	public List<String> parseVisiblePlayers()
 	{
-		final String configPlayers = config.getVisiblePlayers().toLowerCase();
+		final String configPlayers = Text.toJagexName(config.getVisiblePlayers().toLowerCase());
 
 		if (configPlayers.isEmpty())
 		{
@@ -299,7 +299,7 @@ public class PartyHealthStatusPlugin extends Plugin
 		//an update has been requested, resync party members hp data
 		if (queuedUpdate && client.getLocalPlayer() != null && partyService.isInParty() && partyService.getLocalMember() != null)
 		{
-			String name = client.getLocalPlayer().getName();
+			String name = SanitizeName(client.getLocalPlayer().getName());
 			String partyName = partyService.getMemberById(partyService.getLocalMember().getMemberId()).getDisplayName();
 			//dont send unless the partyname has updated to the local name
 			if (name != null && name.equals(partyName))
@@ -333,6 +333,10 @@ public class PartyHealthStatusPlugin extends Plugin
 			//handle self locally.
 			RegisterMember(partyService.getLocalMember().getMemberId(),name,currentHP,maxHP);
 		}
+	}
+
+	String SanitizeName(String name){
+		return Text.removeTags(Text.toJagexName(name));
 	}
 
 	public boolean RenderText(TextRenderType textRenderType, boolean healthy){
@@ -398,12 +402,21 @@ public class PartyHealthStatusPlugin extends Plugin
 		return color;
 	}
 
-	String GenerateTargetText(Player player){
-		String name = player.getName();
-		boolean validMember = members.containsKey(name);
 
-		int currentHP = validMember ? members.get(name).getCurrentHP() : -1;
-		int maxHP = validMember ? members.get(name).getMaxHP() : -1;
+	boolean RenderPlayer(String sanitizedName){
+		if(!members.containsKey(sanitizedName))
+			return false;
+		if(!visiblePlayers.isEmpty() && !visiblePlayers.contains(sanitizedName.toLowerCase()))
+			return false;
+		return true;
+	}
+
+	String GenerateTargetText(Player player){
+		String rawName = player.getName();
+		String sanitizedName = SanitizeName(rawName);
+		boolean validMember = RenderPlayer(sanitizedName);
+		int currentHP = validMember ? members.get(sanitizedName).getCurrentHP() : -1;
+		int maxHP = validMember ? members.get(sanitizedName).getMaxHP() : -1;
 		boolean healthy = IsHealthy(currentHP,maxHP);
 
 		Color greyedOut = new Color(128,128,128);
@@ -411,7 +424,7 @@ public class PartyHealthStatusPlugin extends Plugin
 
 		return ColorUtil.wrapWithColorTag("Heal Other", healthy ? greyedOut : Color.green) +
 				ColorUtil.wrapWithColorTag(" -> ", healthy ? greyedOut : Color.white) +
-				ColorUtil.wrapWithColorTag(name, healthy ? greyedOut : color) +
+				ColorUtil.wrapWithColorTag(rawName, healthy ? greyedOut : color) +
 				ColorUtil.wrapWithColorTag(healthy ? "" : ("  (HP-" + currentHP + ")"), healthy ? greyedOut : color);
 	}
 

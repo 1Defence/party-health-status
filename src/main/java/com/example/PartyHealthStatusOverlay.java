@@ -74,11 +74,8 @@ public class PartyHealthStatusOverlay extends Overlay
                 continue;
             }
 
-            String name = player.getName();
-            if(!plugin.getMembers().containsKey(name)){
-                continue;
-            }
-            if(!plugin.getVisiblePlayers().isEmpty() && !plugin.getVisiblePlayers().contains(name.toLowerCase())){
+            String name = plugin.SanitizeName(player.getName());
+            if(!plugin.RenderPlayer(name)){
                 continue;
             }
 
