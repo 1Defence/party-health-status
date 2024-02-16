@@ -38,6 +38,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import net.runelite.api.*;
+import net.runelite.api.events.AccountHashChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.StatChanged;
@@ -112,7 +113,14 @@ public class PartyHealthStatusPlugin extends Plugin
 	@Getter(AccessLevel.PACKAGE)
 	private List<String> visiblePlayers = new ArrayList<>();
 
+	/**
+	 * Hidden players from the configuration (Strings)
+	 */
+	@Getter(AccessLevel.PACKAGE)
+	private List<String> hiddenPlayers = new ArrayList<>();
+
 	private final String DEFAULT_MEMBER_NAME = "<unknown>";
+	private String currentLocalUsername;
 
 	/*<|Cached Configs*/
 
@@ -135,6 +143,7 @@ public class PartyHealthStatusPlugin extends Plugin
 
 
 	boolean hideAllPlayers,
+			hideSelf,
 			renderPlayerHull,
 			recolorHealOther,
 			drawPercentByName,
@@ -215,9 +224,9 @@ public class PartyHealthStatusPlugin extends Plugin
 	}
 
 
-	public List<String> parseVisiblePlayers()
+	public List<String> parsePlayerList(String playerList)
 	{
-		final String configPlayers = Text.toJagexName(config.getVisiblePlayers().toLowerCase());
+		final String configPlayers = playerList.toLowerCase();
 
 		if (configPlayers.isEmpty())
 		{
@@ -225,6 +234,14 @@ public class PartyHealthStatusPlugin extends Plugin
 		}
 
 		return Text.fromCSV(configPlayers);
+	}
+
+	public List<String> parseVisiblePlayers(){
+		return parsePlayerList(config.getVisiblePlayers());
+	}
+
+	public List<String> parseHiddenPlayers(){
+		return parsePlayerList(config.getHiddenPlayers());
 	}
 
 	@Subscribe
@@ -258,6 +275,7 @@ public class PartyHealthStatusPlugin extends Plugin
 
 
 		hideAllPlayers = config.hideAllPlayers();
+				hideSelf = config.hideSelf();
 				renderPlayerHull = config.renderPlayerHull();
 				recolorHealOther = config.recolorHealOther();
 				drawPercentByName = config.drawPercentByName();
@@ -271,6 +289,7 @@ public class PartyHealthStatusPlugin extends Plugin
 
 
 		visiblePlayers = parseVisiblePlayers();
+		hiddenPlayers = parseHiddenPlayers();
 	}
 
 
@@ -299,13 +318,13 @@ public class PartyHealthStatusPlugin extends Plugin
 		//an update has been requested, resync party members hp data
 		if (queuedUpdate && client.getLocalPlayer() != null && partyService.isInParty() && partyService.getLocalMember() != null)
 		{
-			String name = SanitizeName(client.getLocalPlayer().getName());
+			currentLocalUsername = SanitizeName(client.getLocalPlayer().getName());
 			String partyName = partyService.getMemberById(partyService.getLocalMember().getMemberId()).getDisplayName();
 			//dont send unless the partyname has updated to the local name
-			if (name != null && name.equals(partyName))
+			if (currentLocalUsername != null && currentLocalUsername.equals(partyName))
 			{
 				queuedUpdate = false;
-				SendUpdate(name, client.getBoostedSkillLevel(Skill.HITPOINTS), client.getRealSkillLevel(Skill.HITPOINTS));
+				SendUpdate(currentLocalUsername, client.getBoostedSkillLevel(Skill.HITPOINTS), client.getRealSkillLevel(Skill.HITPOINTS));
 			}
 		}
 	}
@@ -408,6 +427,11 @@ public class PartyHealthStatusPlugin extends Plugin
 			return false;
 		if(!visiblePlayers.isEmpty() && !visiblePlayers.contains(sanitizedName.toLowerCase()))
 			return false;
+		if(hiddenPlayers.contains(sanitizedName.toLowerCase()))
+			return false;
+		if(hideSelf && currentLocalUsername.equals(sanitizedName)){
+			return false;
+		}
 		return true;
 	}
 

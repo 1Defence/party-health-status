@@ -57,7 +57,18 @@ public interface PartyHealthStatusConfig extends Config
 	}
 
 	@ConfigItem(
-			position = 0,
+			position = 1,
+			keyName = "hideSelf",
+			name = "Hide Self",
+			description = "Local player won't have visuals shown",
+			section = visualOverlay)
+	default boolean hideSelf()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+			position = 2,
 			keyName = "visiblePlayers",
 			name = "Visible Players",
 			description = "Only names listed will have visuals shown, if list is empty all connected party members will show up",
@@ -68,9 +79,21 @@ public interface PartyHealthStatusConfig extends Config
 		return "";
 	}
 
+	@ConfigItem(
+			position = 3,
+			keyName = "hiddenPlayers",
+			name = "Hidden Players",
+			description = "Names listed will not have visuals",
+			section = visualOverlay
+	)
+	default String getHiddenPlayers()
+	{
+		return "";
+	}
+
 	@Alpha
 	@ConfigItem(
-			position = 1,
+			position = 4,
 			keyName = "healthyColor",
 			name = "Healthy Color",
 			description = "The default color of a healthy full-HP player",
@@ -81,7 +104,7 @@ public interface PartyHealthStatusConfig extends Config
 		return new Color(255,255,255,50);
 	}
 	@ConfigItem(
-			position = 2,
+			position = 5,
 			keyName = "healthyOffset",
 			name = "Healthy Offset",
 			description = "The offset from maximum hp to render an account as healthy/full-HP, ex 10 @99hp would be 89",
@@ -92,7 +115,7 @@ public interface PartyHealthStatusConfig extends Config
 	}
 
 	@ConfigItem(
-			position = 3,
+			position = 6,
 			keyName = "hullOpacity",
 			name = "Hull Opacity",
 			description = "hull opcacity, 30 recommended",
@@ -100,7 +123,7 @@ public interface PartyHealthStatusConfig extends Config
 	default int hullOpacity() { return 30; }
 
 	@ConfigItem(
-			position = 4,
+			position = 7,
 			keyName = "renderPlayerHull",
 			name = "Render Player Hull",
 			description = "Render the hull of visible party members",
@@ -111,7 +134,7 @@ public interface PartyHealthStatusConfig extends Config
 	}
 
 	@ConfigItem(
-			position = 5,
+			position = 8,
 			keyName = "recolorHealOther",
 			name = "Recolor Heal Other",
 			description = "Recolor heal other menus based on current hitpoints, grey will indicate the member is healthy/full hitpoints",
@@ -122,7 +145,7 @@ public interface PartyHealthStatusConfig extends Config
 	}
 
 	@ConfigItem(
-			position = 6,
+			position = 9,
 			keyName = "colorType",
 			name = "Color Type",
 			description = "Method of color calculation",
