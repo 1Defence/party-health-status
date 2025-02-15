@@ -467,7 +467,7 @@ public class PartyHealthStatusPlugin extends Plugin
 
 			if(option.equals("Cast") && target.startsWith("Heal Other")){
 
-				Player player = client.getCachedPlayers()[event.getIdentifier()];
+				Player player = client.getTopLevelWorldView().players().byIndex(event.getIdentifier());
 
 				MenuEntry[] menuEntries = client.getMenuEntries();
 				final MenuEntry menuEntry = menuEntries[menuEntries.length - 1];

@@ -67,7 +67,7 @@ public class PartyHealthStatusOverlay extends Overlay
         List<WorldPoint> trackedLocations = new ArrayList<>();
 
 
-        for(Player player : client.getPlayers()){
+        for(Player player : client.getTopLevelWorldView().players()){
 
             if (player == null || player.getName() == null)
             {
