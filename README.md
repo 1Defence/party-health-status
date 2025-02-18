@@ -17,7 +17,7 @@ https://github.com/user-attachments/assets/86e9dfa3-2e5a-4a7c-b66f-be26bfd44627
 
   ![PartyHealthVisualLists](https://github.com/user-attachments/assets/21e5b1cf-5f09-4675-9645-0a1c5845c7e3)
 
-<a name="Healthy"></a>
+<a id="Healthy"></a>
 * Optional offset that determines what hitpoints are considered to be healthy.
 
   ![PartyHealthHealthy](https://github.com/user-attachments/assets/060a44e0-8070-4dde-b275-74844d6edada)
@@ -45,7 +45,7 @@ https://github.com/user-attachments/assets/86e9dfa3-2e5a-4a7c-b66f-be26bfd44627
     * You specify the Low and Medium value.<br/>
     * Low Color represents HP equal to or less than the specified ***LOW*** value.<br/>
     * Medium Color represents HP equal to or less than the specified ***MEDIUM*** value.<br/>
-    * High Color represents HP greater than ***MEDIUM*** value and under the calculated [Healthy](#Healthy "See Healthy Offset config mentioned above.") value.
+    * High Color represents HP greater than ***MEDIUM*** value and under the calculated <a href="#Healthy" title="See Healthy Offset config mentioned above.">Healthy</a> value.
 
   - Lerp 3d
     * Linearly interpolates the color between 3 points.
@@ -57,7 +57,7 @@ https://github.com/user-attachments/assets/86e9dfa3-2e5a-4a7c-b66f-be26bfd44627
     * Introduces a Hitpoints Minimum, this is used to dictate when the value is fully red.
    
   - Static
-    * The color will always be the specified [Healthy](#Healthy "See Healthy Color config mentioned above.") Color.
+    * The color will always be the specified <a href="#Healthy" title="See Healthy Color config mentioned above.">Healthy</a> Color.
 
 # Text Overlay
 
@@ -68,7 +68,7 @@ https://github.com/user-attachments/assets/86e9dfa3-2e5a-4a7c-b66f-be26bfd44627
     ![PartyHealthTextRenders](https://github.com/user-attachments/assets/692699c8-282e-4645-af47-d762b0cf5768)
 
     - Configures when to render the given name or HP of a player.
-    - The ***When Missing HP*** option uses the [Healthy Offset](#Healthy "See Healthy Offset config mentioned above.") and renders if the player is missing more than that specified value in HP.
+    - The ***When Missing HP*** option uses the <a href="#Healthy" title="See Healthy Offset config mentioned above.">Healthy Offset</a> and renders if the player is missing more than that specified value in HP.
    
   * Postfix
     
