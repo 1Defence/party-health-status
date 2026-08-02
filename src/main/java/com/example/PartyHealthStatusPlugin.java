@@ -42,6 +42,9 @@ import net.runelite.api.events.AccountHashChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.StatChanged;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.callback.RenderCallback;
+import net.runelite.client.callback.RenderCallbackManager;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -94,6 +97,9 @@ public class PartyHealthStatusPlugin extends Plugin
 	private Client client;
 
 	@Inject
+	private ClientThread clientThread;
+
+	@Inject
 	private WSClient wsClient;
 
 	@Getter(AccessLevel.PACKAGE)
@@ -118,6 +124,9 @@ public class PartyHealthStatusPlugin extends Plugin
 	 */
 	@Getter(AccessLevel.PACKAGE)
 	private List<String> hiddenPlayers = new ArrayList<>();
+
+	@Getter(AccessLevel.PACKAGE)
+	private List<String> hiddenPartyMembers = new ArrayList<>();
 
 	private final String DEFAULT_MEMBER_NAME = "<unknown>";
 	private String currentLocalUsername;
@@ -156,6 +165,9 @@ public class PartyHealthStatusPlugin extends Plugin
 	ColorType colorType;
 	/*Cached Configs|>*/
 
+	@Inject
+	private RenderCallbackManager renderCallbackManager;
+
 	@Provides
 	PartyHealthStatusConfig provideConfig(ConfigManager configManager)
 	{
@@ -170,6 +182,10 @@ public class PartyHealthStatusPlugin extends Plugin
 		lastKnownHP = -1;
 		queuedUpdate = true;
 		wsClient.registerMessage(PartyHealthStatusUpdate.class);
+		clientThread.invokeLater(() ->
+		{
+			renderCallbackManager.register(renderCallback);
+		});
 	}
 
 	@Override
@@ -178,6 +194,10 @@ public class PartyHealthStatusPlugin extends Plugin
 		wsClient.unregisterMessage(PartyHealthStatusUpdate.class);
 		overlayManager.remove(partyHealthStatusOverlay);
 		members.clear();
+		clientThread.invoke(() ->
+		{
+			renderCallbackManager.unregister(renderCallback);
+		});
 	}
 
 	@Subscribe
@@ -243,6 +263,9 @@ public class PartyHealthStatusPlugin extends Plugin
 	public List<String> parseHiddenPlayers(){
 		return parsePlayerList(config.getHiddenPlayers());
 	}
+	public List<String> parseHiddenPartyMembers(){
+		return parsePlayerList(config.getHiddenPartyMembers());
+	}
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged)
@@ -290,6 +313,7 @@ public class PartyHealthStatusPlugin extends Plugin
 
 		visiblePlayers = parseVisiblePlayers();
 		hiddenPlayers = parseHiddenPlayers();
+		hiddenPartyMembers = parseHiddenPartyMembers();
 	}
 
 
@@ -328,6 +352,38 @@ public class PartyHealthStatusPlugin extends Plugin
 			}
 		}
 	}
+
+	private final RenderCallback renderCallback = new RenderCallback()
+	{
+		@Override
+		public boolean addEntity(Renderable renderable, boolean ui)
+		{
+			if (hiddenPartyMembers.isEmpty())
+				return true;
+
+			if (renderable instanceof Player)
+			{
+				Player player = (Player) renderable;
+				String name = SanitizeName(player.getName());
+
+				//Only allowed to hide if party member
+				boolean validPartyMember = partyService.getMemberByDisplayName(name) != null;
+
+				boolean hidden = hiddenPartyMembers.contains(name.toLowerCase());
+
+				//dont parse if not in list
+				if(!hidden)
+					return true;
+
+				if(validPartyMember)
+					return false;
+			}
+			return true;
+		}
+	};
+
+
+
 	@Subscribe
 	public void onStatChanged(StatChanged statChanged)
 	{

@@ -43,6 +43,9 @@ public interface PartyHealthStatusConfig extends Config
 	@ConfigSection(name="Text Overlay", description="text overlay settings", position=2, closedByDefault=true)
 	String textOverlay = "textOverlay";
 
+	@ConfigSection(name="Other Overlay", description="other overlay settings", position=3, closedByDefault=true)
+	String otherOverlay = "otherOverlay";
+
 	/*Visual Overlay*/
 
 	@ConfigItem(
@@ -326,6 +329,18 @@ public interface PartyHealthStatusConfig extends Config
 	default boolean boldFont()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+			position = 9,
+			keyName = "hiddenPartyMembers",
+			name = "Hidden Members",
+			description = "Entity hide given party members",
+			section = otherOverlay
+	)
+	default String getHiddenPartyMembers()
+	{
+		return "";
 	}
 
 }
