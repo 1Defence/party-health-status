@@ -38,7 +38,6 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import net.runelite.api.*;
-import net.runelite.api.events.AccountHashChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.StatChanged;
@@ -59,6 +58,8 @@ import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.party.PartyPlugin;
 import net.runelite.client.plugins.party.PartyPluginService;
+import net.runelite.client.plugins.party.data.PartyData;
+import net.runelite.client.plugins.party.messages.StatusUpdate;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.party.PartyService;
 import net.runelite.client.util.ColorUtil;
@@ -104,6 +105,9 @@ public class PartyHealthStatusPlugin extends Plugin
 
 	@Getter(AccessLevel.PACKAGE)
 	private final Map<String, PartyHealthStatusMember> members = new ConcurrentHashMap<>();
+
+	@Getter(AccessLevel.PACKAGE)
+	private final Map<String, PartyHealthStatusMember> genericPartyMembers = new ConcurrentHashMap<>();
 
 	@Getter(AccessLevel.PACKAGE)
 	@Setter(AccessLevel.PACKAGE)
@@ -213,6 +217,33 @@ public class PartyHealthStatusPlugin extends Plugin
 		queuedUpdate = true;
 	}
 
+	/**
+	 * genericPartyMembers acts as a fallback for users who don't have this plugin, or are dropping these packets.
+	 */
+	@Subscribe(priority = -100)
+	public void onStatusUpdate(final StatusUpdate message) {
+		long updateId = message.getMemberId();
+		if (partyService.getLocalMember().getMemberId() == updateId) {
+			return;
+		}
+
+		String name = partyService.getMemberById(updateId).getDisplayName();
+		if (name.equals(DEFAULT_MEMBER_NAME)) {
+			return;
+		}
+
+		PartyHealthStatusMember member = genericPartyMembers.computeIfAbsent(name, PartyHealthStatusMember::new);
+		UpdateMember(member, name, updateId);
+	}
+
+	void UpdateMember(PartyHealthStatusMember member, String name, long memberId){
+		PartyData partyData = partyPluginService.getPartyData(memberId);
+		member.setName(name);
+		member.setMemberID(memberId);
+		member.setCurrentHP(partyData.getHitpoints());
+		member.setMaxHP(partyData.getMaxHitpoints());
+	}
+
 	@Subscribe
 	public void onRuneScapeProfileChanged(RuneScapeProfileChanged runeScapeProfileChanged)
 	{
@@ -230,6 +261,7 @@ public class PartyHealthStatusPlugin extends Plugin
 		}
 		if(!name.isEmpty()) {
 			members.remove(name);
+			genericPartyMembers.remove(name);
 		}
 	}
 
@@ -238,6 +270,7 @@ public class PartyHealthStatusPlugin extends Plugin
 			return;
 		}
 		PartyHealthStatusMember member = members.computeIfAbsent(memberName, PartyHealthStatusMember::new);
+		member.setName(memberName);
 		member.setMemberID(memberID);
 		member.setCurrentHP(currentHP);
 		member.setMaxHP(maxHP);
@@ -433,6 +466,18 @@ public class PartyHealthStatusPlugin extends Plugin
 		return currentHP == -1 || currentHP >= (maxHP-healthyOffSet);
 	}
 
+	public int GetHitpoints(String name, boolean current){
+		PartyHealthStatusMember member = getMembers().get(name);
+		if(member == null){
+			member = getGenericPartyMembers().get(name);
+		}
+
+		if(member == null)
+			return 99;
+
+		return current ? member.getCurrentHP() : member.getMaxHP();
+	}
+
 	public Color GetHitPointsColor(int currentHP, int maxHP){
 		Color color = healthyColor;
 
@@ -479,7 +524,7 @@ public class PartyHealthStatusPlugin extends Plugin
 
 
 	boolean RenderPlayer(String sanitizedName){
-		if(!members.containsKey(sanitizedName))
+		if(!members.containsKey(sanitizedName) && !genericPartyMembers.containsKey(sanitizedName))
 			return false;
 		if(!visiblePlayers.isEmpty() && !visiblePlayers.contains(sanitizedName.toLowerCase()))
 			return false;
@@ -495,8 +540,8 @@ public class PartyHealthStatusPlugin extends Plugin
 		String rawName = player.getName();
 		String sanitizedName = SanitizeName(rawName);
 		boolean validMember = RenderPlayer(sanitizedName);
-		int currentHP = validMember ? members.get(sanitizedName).getCurrentHP() : -1;
-		int maxHP = validMember ? members.get(sanitizedName).getMaxHP() : -1;
+		int currentHP = validMember ? GetHitpoints(sanitizedName,true) : -1;
+		int maxHP = validMember ? GetHitpoints(sanitizedName,false) : -1;
 		boolean healthy = IsHealthy(currentHP,maxHP);
 
 		Color greyedOut = new Color(128,128,128);

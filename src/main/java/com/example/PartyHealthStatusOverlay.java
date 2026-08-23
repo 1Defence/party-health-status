@@ -80,8 +80,8 @@ public class PartyHealthStatusOverlay extends Overlay
             }
 
 
-            int currentHP = plugin.getMembers().get(name).getCurrentHP();
-            int maxHP = plugin.getMembers().get(name).getMaxHP();
+            int currentHP = plugin.GetHitpoints(name,true);
+            int maxHP = plugin.GetHitpoints(name,false);
 
             boolean healthy = plugin.IsHealthy(currentHP,maxHP);
 

@@ -34,17 +34,15 @@ import lombok.Setter;
 @Setter
 class PartyHealthStatusMember
 {
-    private final String name;
+    private String name;
     private long memberID;
     private int currentHP;
     private int maxHP;
-
-    public PartyHealthStatusMember(String name, long memberID, int currentHP, int maxHP){
+    public PartyHealthStatusMember(String name)
+    {
         this.name = name;
-        this.memberID = memberID;
-        this.currentHP = currentHP;
-        this.maxHP = maxHP;
+        this.memberID = -1;
+        this.currentHP = -1;
+        this.maxHP = -1;
     }
-
-
 }
