@@ -50,16 +50,16 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.PartyChanged;
 
 import net.runelite.client.events.RuneScapeProfileChanged;
+import net.runelite.client.party.PartyMember;
 import net.runelite.client.party.WSClient;
 import net.runelite.client.party.events.UserJoin;
 import net.runelite.client.party.events.UserPart;
+import net.runelite.client.party.messages.PartyData;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.party.PartyPlugin;
 import net.runelite.client.plugins.party.PartyPluginService;
-import net.runelite.client.plugins.party.data.PartyData;
-import net.runelite.client.plugins.party.messages.StatusUpdate;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.party.PartyService;
 import net.runelite.client.util.ColorUtil;
@@ -221,7 +221,8 @@ public class PartyHealthStatusPlugin extends Plugin
 	 * genericPartyMembers acts as a fallback for users who don't have this plugin, or are dropping these packets.
 	 */
 	@Subscribe(priority = -100)
-	public void onStatusUpdate(final StatusUpdate message) {
+	public void onPartyData(PartyData message)
+	{
 		long updateId = message.getMemberId();
 		if (partyService.getLocalMember().getMemberId() == updateId) {
 			return;
@@ -237,11 +238,11 @@ public class PartyHealthStatusPlugin extends Plugin
 	}
 
 	void UpdateMember(PartyHealthStatusMember member, String name, long memberId){
-		PartyData partyData = partyPluginService.getPartyData(memberId);
+		final PartyMember partyMember = partyService.getMemberById(memberId);
 		member.setName(name);
 		member.setMemberID(memberId);
-		member.setCurrentHP(partyData.getHitpoints());
-		member.setMaxHP(partyData.getMaxHitpoints());
+		member.setCurrentHP(partyMember.getStatBoost(Skill.HITPOINTS));
+		member.setMaxHP(partyMember.getStatBase(Skill.HITPOINTS));
 	}
 
 	@Subscribe
